@@ -4,7 +4,7 @@ name: campus-overflow
 
 services:
   mysql:
-    image: mysql:8.0.39
+    image: m.daocloud.io/docker.io/mysql:8.0.39
     container_name: co-mysql
     command:
       - --character-set-server=utf8mb4
@@ -17,7 +17,7 @@ services:
       MYSQL_DATABASE: campus_overflow
       MYSQL_USER: campus
       MYSQL_PASSWORD: ${DB_PASSWORD:-campus_dev_pwd}
-    ports: ["3306:3306"]
+    ports: ["3307:3306"]
     volumes: ["mysql-data:/var/lib/mysql"]
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-root_dev_pwd}"]
@@ -26,7 +26,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:7-alpine
+    image: m.daocloud.io/docker.io/redis:7-alpine
     container_name: co-redis
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     ports: ["6379:6379"]
