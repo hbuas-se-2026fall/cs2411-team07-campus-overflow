@@ -1,38 +1,46 @@
 \# 上下文映射 Context Map
 
-项目：CampusOverflow 校园问答平台
+
+
+\## 共享内核（Shared Kernel）
+
+`co-shared-kernel`：全部上下文共同依赖，存放公共值对象、通用异常、集成事件基类；修改必须全员评审，禁止某个上下文私自改动。
 
 
 
-\## 1.  bounded context 领域边界
-
-1\. 用户身份上下文：负责账号注册、登录、个人信息管理
-
-2\. 问答内容上下文：发布问题、浏览问题、提交回答、点赞
-
-3\. 内容审核上下文：管理员处理违规提问、违规回答
+\## 上游 → 下游 集成关系
 
 
 
-\## 2. 上下文之间关系
+| 上游 → 下游 | 集成模式 | 集成手段 | 说明 |
 
-\- 用户身份上下文 ↔ 问答内容上下文：合作关系
+|---|---|---|---|
 
-&#x20; 用户登录成功后，才能发布问题、写回答、点赞；问答模块读取用户身份信息标记作者。
+| Identity → Q\&A / Reputation / Discovery | 开放主机服务 OHS | 同步 UserApi + 异步 UserRegisteredEvent | 下游只拿 UserSummary，不获取密码等隐私 |
 
-\- 问答内容上下文 ↔ 内容审核上下文：客户-供应商关系
+| Q\&A → Reputation | 客户-供应商 | 异步 AnswerAccepted/VoteCast 等事件 + 同步 QaQueryApi | Reputation 记账所需字段由事件携带 |
 
-&#x20; 问答模块产出提问、回答数据，供审核上下文读取，用于违规内容检查。
+| Q\&A → Discovery | 遵奉者 Conformist | 异步 Question/Answer/Vote/Comment/ContentDeleted 事件 | Discovery 维护自己的搜索投影 |
 
-\- 用户身份上下文 ↔ 内容审核上下文：合作关系
-
-&#x20; 审核模块查询用户信息，对违规用户进行处置。
+| Reputation → Discovery | 遵奉者 Conformist | 异步 Bounty/BadgeAwarded 事件 | 用于悬赏标记、徽章通知 |
 
 
 
-\## 3. 共享词汇说明
+\## 子域划分
 
-跨上下文之间交互数据：用户ID、问题ID、回答ID
+
+
+| 子域 | 类型 | 对应限界上下文 |
+
+|---|---|---|
+
+| 课程问答 | 核心域 | Q\&A |
+
+| 声誉与激励 | 核心域 | Reputation |
+
+| 身份与课程 | 支撑子域 | Identity |
+
+| 内容发现 | 通用支撑子域 | Discovery |
 
 
 
