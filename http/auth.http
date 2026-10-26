@@ -1,0 +1,56 @@
+### 【前置说明】后端运行在 localhost:8080，session cookie IDE HTTP Client自动保存
+### 1 获取CSRF令牌，拿到XSRF‑TOKEN Cookie
+GET http://localhost:8080/api/v1/auth/csrf
+Accept: application/json
+
+> {%
+    client.global.set("xsrfToken", response.cookies.get("XSRF‑TOKEN").value);
+%}
+
+### 2 用户注册普通学生账号
+POST http://localhost:8080/api/v1/auth/register
+Content‑Type: application/json
+X‑XSRF‑TOKEN: {{xsrfToken}}
+
+{
+  "username": "student01",
+  "password": "Abc123456",
+  "displayName": "测试学生小明"
+}
+
+### 3 用户登录
+POST http://localhost:8080/api/v1/auth/login
+Content‑Type: application/json
+X‑XSRF‑TOKEN: {{xsrfToken}}
+
+{
+  "username": "student01",
+  "password": "Abc123456"
+}
+
+### 4 获取当前登录用户信息 me
+GET http://localhost:8080/api/v1/auth/me
+X‑XSRF‑TOKEN: {{xsrfToken}}
+Accept: application/json
+
+### 5 获取全部课程列表
+GET http://localhost:8080/api/v1/courses
+X‑XSRF‑TOKEN: {{xsrfToken}}
+Accept: application/json
+
+### 6 获取我的课程列表
+GET http://localhost:8080/api/v1/courses/mine
+X‑XSRF‑TOKEN: {{xsrfToken}}
+Accept: application/json
+
+### 7 加入课程，替换{courseId}为实际课程id
+POST http://localhost:8080/api/v1/courses/{{courseId}}/join
+Content‑Type: application/json
+X‑XSRF‑TOKEN: {{xsrfToken}}
+
+{}
+
+### 8 登出账号
+POST http://localhost:8080/api/v1/auth/logout
+X‑XSRF‑TOKEN: {{xsrfToken}}
+Accept: application/json
