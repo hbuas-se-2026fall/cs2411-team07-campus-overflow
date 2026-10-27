@@ -36,10 +36,8 @@ jobs:
       - name: Stage2 Run unit tests for Sprint0 modules
         run: mvn -B -f backend/pom.xml test -pl "${{ env.SPRINT_MODULES }}" -am
 
-      - name: Stage3 Run ArchitectureTest ONLY inside co-bootstrap
-        run: |
-          cd backend/co-bootstrap
-          mvn -B test -Dtest=ArchitectureTest -e
+      - name: Stage3 Run ArchitectureTest ONLY in co-bootstrap
+        run: mvn -B -f backend/pom.xml test -pl co-bootstrap -am -Dtest=ArchitectureTest -Dsurefire.failIfNoSpecifiedTests=false -e
 
       - name: Stage4 Coverage report
         run: mvn -B -f backend/pom.xml verify -DskipITs -Djacoco.skip=false -pl "${{ env.SPRINT_MODULES }}" -am
