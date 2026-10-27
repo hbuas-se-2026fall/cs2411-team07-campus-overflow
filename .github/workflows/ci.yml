@@ -20,24 +20,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
 
-      - name: Clean maven cache
+      - name: Clean local maven cache
         run: rm -rf ~/.m2/repository/com/campusoverflow
 
-      - name: Stage1 Compile Sprint‑0 modules
+      - name: Stage1 Compile all needed modules
         run: mvn -B -f backend/pom.xml clean compile -pl "${{ env.SPRINT_MODULES }},co-bootstrap" -am
 
-      - name: Stage2 UnitTest Sprint‑0 modules
+      - name: Stage2 Run unit tests for Sprint0 modules
         run: mvn -B -f backend/pom.xml test -pl "${{ env.SPRINT_MODULES }}" -am
 
-      - name: Stage3 Run ArchitectureTest in co-bootstrap
-        run: mvn -B -f backend/pom.xml test -pl co-bootstrap -am -Dtest=ArchitectureTest -DfailIfNoTests=false -e
+      - name: Stage3 Run ArchitectureTest ONLY inside co-bootstrap
+        run: |
+          cd backend/co-bootstrap
+          mvn -B test -Dtest=ArchitectureTest -e
 
-      - name: Stage4 Coverage for Sprint‑0
+      - name: Stage4 Coverage report
         run: mvn -B -f backend/pom.xml verify -DskipITs -Djacoco.skip=false -pl "${{ env.SPRINT_MODULES }}" -am
