@@ -27,19 +27,17 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Clean old project maven artifacts
+      - name: Clean maven cache
         run: rm -rf ~/.m2/repository/com/campusoverflow
 
-      - name: Stage1 Compile Sprint‑0 scope modules
-        run: mvn -B -f backend/pom.xml clean compile -pl "${{ env.SPRINT_MODULES }}" -am
+      - name: Stage1 Compile Sprint‑0 modules
+        run: mvn -B -f backend/pom.xml clean compile -pl "${{ env.SPRINT_MODULES }},co-bootstrap" -am
 
-      - name: Stage2 UnitTest for Sprint‑0 modules
+      - name: Stage2 UnitTest Sprint‑0 modules
         run: mvn -B -f backend/pom.xml test -pl "${{ env.SPRINT_MODULES }}" -am
 
-      - name: Stage3 ArchitectureTest — full compile bootstrap & dependencies
-        run: |
-          mvn -B -f backend/pom.xml compile -pl co-bootstrap -am
-          mvn -B -f backend/pom.xml test -pl co-bootstrap -am -Dtest=ArchitectureTest -DfailIfNoTests=false -e
+      - name: Stage3 Run ArchitectureTest in co-bootstrap
+        run: mvn -B -f backend/pom.xml test -pl co-bootstrap -am -Dtest=ArchitectureTest -DfailIfNoTests=false -e
 
-      - name: Stage4 Coverage (Sprint‑0 scope)
+      - name: Stage4 Coverage for Sprint‑0
         run: mvn -B -f backend/pom.xml verify -DskipITs -Djacoco.skip=false -pl "${{ env.SPRINT_MODULES }}" -am
