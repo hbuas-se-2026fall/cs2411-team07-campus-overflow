@@ -96,3 +96,50 @@ cd ../frontend && npm install && npm run dev      # http://localhost:5173
 | 中文搜索没结果 | 必须用 compose 里的 MySQL（已配置 `ngram_token_size=2`），自建库请对照参数 |
 | 事件重复导致加分两次 | 消费端必须幂等：账本唯一键 `(event_id, user_id, reason)` 或 `processed_event` 表 |
 | 提交后 CI 红 | 先本地跑 `mvn verify`，再推送；不要把红的分支合并到 `main` |
+
+markdown
+## 开发者须知
+
+> 本部分面向项目开发人员，说明本地开发环境启动、教师/管理员测试账号获取注意事项。
+
+### ⚠️ 重要提示
+`demo` profile 依赖尚未实现的悬赏相关业务逻辑，**Sprint 2 结束之前禁止使用 demo 配置文件启动项目**，仅使用 `dev` 配置进行本地开发调试。
+
+### Sprint‑0 本地环境启动步骤
+1. 启动 Docker 中间件 MySQL、Redis
+```shell
+docker compose -f deploy/docker-compose.yml up -d mysql redis
+启动后端（dev 环境）
+shell
+cd backend
+mvn spring-boot:run -pl co-bootstrap -Dspring-boot.run.profiles=dev
+启动前端
+shell
+cd frontend
+npm install
+npm run dev
+访问地址
+前端应用：http://localhost:5173
+Swagger API 接口文档：http://localhost:8080/swagger-ui.html
+获取教师 / 管理员测试账号
+开发阶段没有预置演示账号，需要先注册普通学生账号，再通过数据库 SQL 修改角色权限。
+修改角色完成后必须退出账号并重新登录，用户身份信息缓存在 Redis 会话中，不重新登录权限不会生效。
+在前端注册一个普通账号，记下该账号的 username（示例：t2001、admin01）。
+进入 MySQL 容器命令行：
+shell
+docker exec -it co-mysql mysql -ucampus -pcampus123 campus_overflow
+执行 SQL 语句提升账号角色：
+sql
+-- 将账号设置为【教师】，标记校园身份已认证
+UPDATE id_user SET role = 'TEACHER', verified = TRUE WHERE username = 't2001';
+
+-- 将账号设置为【超级管理员】，标记校园身份已认证
+UPDATE id_user SET role = 'ADMIN', verified = TRUE WHERE username = 'admin01';
+角色字段说明
+表格
+role 取值	角色说明
+STUDENT	普通学生（注册默认角色）
+TEACHER	教师，可创建课程、发起悬赏
+TA	课程助教
+ADMIN	超级管理员，拥有全部后台管理权限
+verified：校园身份认证标记，TRUE 代表账号已通过校园身份认证。
