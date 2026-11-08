@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
- * 手写测试替身，Sprint1：Answer / Vote / Comment 行走骨架使用
+ * 手写测试替身（Test Double）。应用服务只依赖端口接口，不需要 Spring、数据库，用于单元测试。
  */
 public final class QaTestFixtures {
 
@@ -99,6 +99,7 @@ public final class QaTestFixtures {
             if (vote.id() == null) {
                 vote.assignId(sequence.incrementAndGet());
             }
+            // Vote.TargetType 映射为 domain.TargetType，当前S1仅有ANSWER枚举项
             TargetType globalType = TargetType.ANSWER;
             store.put(key(vote.voterId(), globalType, vote.targetId()), vote);
             return vote;
