@@ -107,13 +107,15 @@ public final class QaTestFixtures {
             if (vote.id() == null) {
                 vote.assignId(sequence.incrementAndGet());
             }
-            store.put(key(vote.voterId(), vote.targetType(), vote.targetId()), vote);
+            TargetType globalType = TargetType.valueOf(vote.targetType().name());
+            store.put(key(vote.voterId(), globalType, vote.targetId()), vote);
             return vote;
         }
 
         @Override
         public void delete(Vote vote) {
-            store.remove(key(vote.voterId(), vote.targetType(), vote.targetId()));
+            TargetType globalType = TargetType.valueOf(vote.targetType().name());
+            store.remove(key(vote.voterId(), globalType, vote.targetId()));
         }
 
         private static String key(long voterId, TargetType type, long targetId) {
@@ -202,5 +204,19 @@ public final class QaTestFixtures {
         public void record(String action, Long actorId, String targetType, String targetId, String detail) {
             actions.add(action);
         }
+    }
+
+    public static Vote makeVote(long voterId, TargetType targetType, long targetId, int value) {
+        // 核心修复：顶层枚举 → Vote.TargetType
+        Vote.TargetType innerType = Vote.TargetType.valueOf(targetType.name());
+        return Vote.reconstitute(null, voterId, innerType, targetId, value, null, null);
+    }
+
+    public static Vote answerVote(long voterId, long answerId, int value) {
+        return makeVote(voterId, TargetType.ANSWER, answerId, value);
+    }
+
+    public static Vote commentVote(long voterId, long commentId, int value) {
+        return makeVote(voterId, TargetType.COMMENT, commentId, value);
     }
 }
