@@ -6,8 +6,6 @@ import com.campusoverflow.qa.api.event.AnswerEndorsedEvent;
 import com.campusoverflow.qa.api.event.AnswerSubmittedEvent;
 import com.campusoverflow.qa.api.event.CommentPostedEvent;
 import com.campusoverflow.qa.api.event.VoteCastEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,47 +17,40 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 public class ReputationEventHandlers {
-    private static final Logger log = LoggerFactory.getLogger(ReputationEventHandlers.class);
 
     @EventListener
     @Transactional
     public void on(UserRegisteredEvent e) {
-        log.debug("[walking-skeleton] Reputation尚未实现，忽略事件 {}", e.eventId());
         // TODO(S2) see tech-debt issue #18
     }
 
     @EventListener
     @Transactional
     public void on(AnswerAcceptedEvent e) {
-        log.debug("[walking-skeleton] Reputation尚未实现，忽略事件 {}", e.eventId());
         // TODO(S2) see tech-debt issue #18
     }
 
     @EventListener
     @Transactional
     public void on(VoteCastEvent e) {
-        log.debug("[walking-skeleton] Reputation尚未实现，忽略事件 {}", e.eventId());
         // TODO(S2) see tech-debt issue #18
     }
 
     @EventListener
     @Transactional
     public void on(AnswerSubmittedEvent e) {
-        log.debug("[walking-skeleton] Reputation尚未实现，忽略事件 {}", e.eventId());
         // TODO(S2) see tech-debt issue #18
     }
 
     @EventListener
     @Transactional
     public void on(AnswerEndorsedEvent e) {
-        log.debug("[walking-skeleton] Reputation尚未实现，忽略事件 {}", e.eventId());
         // TODO(S2) see tech-debt issue #18
     }
 
     @EventListener
     @Transactional
     public void on(CommentPostedEvent e) {
-        log.debug("[walking-skeleton] Reputation尚未实现，忽略事件 {}", e.eventId());
         // TODO(S2) see tech-debt issue #18
     }
 }
