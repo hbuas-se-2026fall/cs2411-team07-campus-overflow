@@ -68,18 +68,18 @@ class QuestionTest {
         void askerCanAcceptAnAnswerOnce() {
             Question q = persistedQuestion();
             Answer a = persistedAnswer(q, OTHER.userId(), 50);
-            q.accept(a, ASKER, false);
+            q.accept(a, ASKER.userId(), false);
             assertThat(q.acceptedAnswerId()).isEqualTo(50L);
             assertThat(q.isAccepted(50)).isTrue();
 
             Answer b = persistedAnswer(q, 3, 51);
-            assertThatThrownBy(() -> q.accept(b, ASKER, false)).isInstanceOf(ConflictException.class);
+            assertThatThrownBy(() -> q.accept(b, ASKER.userId(), false)).isInstanceOf(ConflictException.class);
         }
 
         @Test
         void courseTeacherCanAcceptOnBehalfOfAsker() {
             Question q = persistedQuestion();
-            q.accept(persistedAnswer(q, OTHER.userId(), 50), TEACHER, true);
+            q.accept(persistedAnswer(q, OTHER.userId(), 50), TEACHER.userId(), true);
             assertThat(q.acceptedAnswerId()).isEqualTo(50L);
         }
 
@@ -87,7 +87,7 @@ class QuestionTest {
         void otherStudentsCannotAccept() {
             Question q = persistedQuestion();
             Answer a = persistedAnswer(q, 3, 50);
-            assertThatThrownBy(() -> q.accept(a, OTHER, false)).isInstanceOf(ForbiddenException.class);
+            assertThatThrownBy(() -> q.accept(a, OTHER.userId(), false)).isInstanceOf(ForbiddenException.class);
         }
 
         @Test
@@ -96,7 +96,7 @@ class QuestionTest {
             Question another = persistedQuestion();
             Answer foreign = Answer.reconstitute(60L, 999L, 3, MarkdownBody.ofAnswer("这是别的问题下面的回答内容"), 0,
                     null, NOW, NOW, null, 0);
-            assertThatThrownBy(() -> q.accept(foreign, ASKER, false)).isInstanceOf(BusinessRuleException.class);
+            assertThatThrownBy(() -> q.accept(foreign, ASKER.userId(), false)).isInstanceOf(BusinessRuleException.class);
             assertThat(another.acceptedAnswerId()).isNull();
         }
 
@@ -104,8 +104,8 @@ class QuestionTest {
         void deletedAnswerCannotBeAccepted() {
             Question q = persistedQuestion();
             Answer a = persistedAnswer(q, 3, 50);
-            a.softDelete(new Actor(3, "回答者", Role.STUDENT), false, false, NOW);
-            assertThatThrownBy(() -> q.accept(a, ASKER, false)).isInstanceOf(BusinessRuleException.class);
+            a.softDelete(new Actor(3, "回答者", Role.STUDENT).userId(), false, false, NOW);
+            assertThatThrownBy(() -> q.accept(a, ASKER.userId(), false)).isInstanceOf(BusinessRuleException.class);
         }
     }
 
@@ -114,9 +114,9 @@ class QuestionTest {
         @Test
         void onlyAuthorOrManagerCanEdit() {
             Question q = persistedQuestion();
-            assertThatThrownBy(() -> q.edit(OTHER, false, q.title(), q.body(), q.tags(), NOW))
+            assertThatThrownBy(() -> q.edit(OTHER.userId(), false, q.title(), q.body(), q.tags(), NOW))
                     .isInstanceOf(ForbiddenException.class);
-            q.edit(TEACHER, true, new Title("红黑树插入后的旋转规则是什么？"), q.body(), q.tags(), NOW.plusSeconds(60));
+            q.edit(TEACHER.userId(), true, new Title("红黑树插入后的旋转规则是什么？"), q.body(), q.tags(), NOW.plusSeconds(60));
             assertThat(q.title().value()).contains("旋转规则");
             assertThat(q.updatedAt()).isAfter(q.createdAt());
         }
@@ -126,15 +126,15 @@ class QuestionTest {
             Question answered = Question.reconstitute(10L, ASKER.userId(), 100L, new Title("一个已经有回答的问题标题"),
                     MarkdownBody.ofQuestion("这个问题已经有了一个回答，所以提问者不能删除。"), Tags.of(List.of("java")),
                     null, 0, 1, 0, NOW, NOW, null, 0);
-            assertThatThrownBy(() -> answered.softDelete(ASKER, false, NOW)).isInstanceOf(BusinessRuleException.class);
-            answered.softDelete(TEACHER, true, NOW);
+            assertThatThrownBy(() -> answered.softDelete(ASKER.userId(), false, NOW)).isInstanceOf(BusinessRuleException.class);
+            answered.softDelete(TEACHER.userId(), true, NOW);
             assertThat(answered.isDeleted()).isTrue();
         }
 
         @Test
         void deletedQuestionCannotBeAnswered() {
             Question q = persistedQuestion();
-            q.softDelete(ASKER, false, NOW);
+            q.softDelete(ASKER.userId(), false, NOW);
             assertThatThrownBy(() -> Answer.submit(q, OTHER.userId(), MarkdownBody.ofAnswer("这是一个迟到了很久的回答内容"), NOW))
                     .isInstanceOf(BusinessRuleException.class);
         }
