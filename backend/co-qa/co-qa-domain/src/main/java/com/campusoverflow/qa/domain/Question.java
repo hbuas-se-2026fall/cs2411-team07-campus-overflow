@@ -96,17 +96,22 @@ public class Question {
     public void accept(Answer answer, Actor operator, boolean actorManagesCourse) {
         ensureNotDeleted();
 
-        // 1. 答案必须属于当前问题
+        // 1. 不能重复采纳（采纳结果不可更改，QA-2002）
+        if (this.acceptedAnswerId() != null) {
+            throw new ConflictException("QA-2002", "该问题已经采纳过回答");
+        }
+
+        // 2. 已删除的回答不能被采纳（QA-0208）
+        if (answer.isDeleted()) {
+            throw new BusinessRuleException("QA-0208", "已删除的回答不能被采纳");
+        }
+
+        // 3. 答案必须属于当前问题
         if (!Objects.equals(this.id(), answer.questionId())) {
             throw new BusinessRuleException("QA-2001", "该回答不属于此问题，不能采纳");
         }
 
-        // 2. 不能重复采纳
-        if (this.acceptedAnswerId() != null) {
-            throw new BusinessRuleException("QA-2004", "该问题已经采纳过回答");
-        }
-
-        // 3. 权限：提问作者 或者 课程管理员
+        // 4. 权限：提问作者 或者 课程管理员
         boolean isAuthor = Objects.equals(operator.userId(), this.authorId);
         if (!isAuthor && !actorManagesCourse) {
             throw new ForbiddenException("QA-3001", "没有权限采纳该回答");
