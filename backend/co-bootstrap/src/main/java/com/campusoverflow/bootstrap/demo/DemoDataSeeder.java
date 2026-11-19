@@ -129,7 +129,13 @@ public class DemoDataSeeder implements ApplicationRunner {
                 我在 Service 里写了 `public void a() { b(); }`，其中 `b()` 上标了 `@Transactional`，
                 但是抛异常后数据并没有回滚。换成从另一个 Bean 调用 `b()` 就正常了，这是为什么？
                 """, List.of("java", "spring-boot", "事务")));
-        bounties.open(teacher, q2, 50, 7);
+        // 悬赏属于 Sprint2（声誉激励）能力；Sprint1 阶段 BountyService 仍是空桩，
+        // 这里跳过而不是让整个应用启动失败，保证 Sprint1 的演示账号可以正常灌入。
+        try {
+            bounties.open(teacher, q2, 50, 7);
+        } catch (UnsupportedOperationException notYetImplemented) {
+            log.warn("悬赏功能尚未实现（Sprint2 交付），演示数据已跳过悬赏：{}", notYetImplemented.getMessage());
+        }
 
         questions.post(hong, new PostQuestionCommand(courseId, "MySQL 的 ngram 全文索引是如何支持中文检索的？",
                 """
