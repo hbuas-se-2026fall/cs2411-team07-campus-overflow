@@ -26,8 +26,8 @@ public record Tags(List<TagName> values) {
         return new Tags(raw.stream().map(TagName::new).toList());
     }
 
+    /** 规范化后的标签名（已小写、去重、保持原始顺序）。 */
     public List<String> names() {
-        // TODO(S2)：实现 Tags.names——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Tags.names 尚未实现");
+        return values.stream().map(TagName::value).toList();
     }
 }
