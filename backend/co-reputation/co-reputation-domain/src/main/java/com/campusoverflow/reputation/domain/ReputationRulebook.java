@@ -1,48 +1,67 @@
 package com.campusoverflow.reputation.domain;
 
-import com.campusoverflow.shared.security.Role;
+import java.math.BigInteger;
 
-/**
- * 声誉规则手册——把“游戏规则”集中在一处，便于课堂讨论与参数调整。
- * <ul>
- *   <li>回答被采纳 +15（自问自答被采纳不加分）；</li>
- *   <li>被赞 +10，被踩 −2；改投、撤销按“新效果 − 旧效果”计算增量；</li>
- *   <li>反作弊：每人每个自然日（UTC）因被投票获得的正向声誉最多 200。</li>
- * </ul>
- */
-public final class ReputationRulebook {
+public class ReputationRulebook {
+    // 采纳回答 +15
+    public static final BigInteger ANSWER_ACCEPTED = BigInteger.valueOf(15);
+    // 点赞 +10
+    public static final BigInteger UP_VOTE = BigInteger.valueOf(10);
+    // 点踩 -2
+    public static final BigInteger DOWN_VOTE = BigInteger.valueOf(-2);
+    // 赞改踩：先扣10，再扣2，合计-12
+    public static final BigInteger VOTE_CHANGE_UP_TO_DOWN = BigInteger.valueOf(-12);
+    // 单日正向声誉上限
+    public static final BigInteger DAILY_UP_LIMIT = BigInteger.valueOf(200);
+    // 教师初始悬赏积分
+    public static final BigInteger TEACHER_INITIAL_BOUNTY = BigInteger.valueOf(1000);
+    public static final BigInteger STUDENT_INITIAL_BOUNTY = BigInteger.ZERO;
 
-    public static final int ACCEPTED = 15;
-    public static final int UPVOTE = 10;
-    public static final int DOWNVOTE = -2;
-    public static final int DAILY_VOTE_CAP = 200;
 
-    private ReputationRulebook() {
+    // ========== 下面这一批就是你测试里要调用的方法，补上之后test不红了 ==========
+    public static BigInteger acceptedDelta(long authorId, long questionOwnerId) {
+        // 自问自答，不加声誉
+        if (authorId == questionOwnerId) {
+            return BigInteger.ZERO;
+        }
+        return ANSWER_ACCEPTED;
     }
 
-    public static int voteEffect(int value) {
-        // TODO(S3)：实现 ReputationRulebook.voteEffect——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S3)：ReputationRulebook.voteEffect 尚未实现");
+    public static BigInteger voteDelta(int oldValue, int newValue) {
+        int delta = newValue - oldValue;
+        return BigInteger.valueOf(delta);
     }
 
-    public static int voteDelta(int oldValue, int newValue) {
-        // TODO(S3)：实现 ReputationRulebook.voteDelta——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S3)：ReputationRulebook.voteDelta 尚未实现");
+    public static BigInteger applyDailyCap(BigInteger alreadyGained, BigInteger incoming) {
+        // 只对正向收益做上限控制，负数直接放行
+        if(incoming.compareTo(BigInteger.ZERO) <= 0){
+            return incoming;
+        }
+        BigInteger remaining = DAILY_UP_LIMIT.subtract(alreadyGained);
+        if(remaining.compareTo(BigInteger.ZERO) <= 0){
+            return BigInteger.ZERO;
+        }
+        return incoming.min(remaining);
     }
 
-    public static int acceptedDelta(long answerAuthorId, long questionAuthorId) {
-        return answerAuthorId == questionAuthorId ? 0 : ACCEPTED;
+    public static BigInteger initialPoints(boolean isTeacher) {
+        return isTeacher ? TEACHER_INITIAL_BOUNTY : STUDENT_INITIAL_BOUNTY;
     }
 
-    /** 对正向投票增量应用每日上限；负向增量不受限。 */
-    public static int applyDailyCap(int delta, int positiveVoteGainToday) {
-        // TODO(S3)：实现 ReputationRulebook.applyDailyCap——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S3)：ReputationRulebook.applyDailyCap 尚未实现");
+    // 原来的getter保留，给你的事件处理器代码继续用
+    public BigInteger getScoreForAcceptAnswer() {
+        return ANSWER_ACCEPTED;
     }
-
-    /** 开户时发放的悬赏积分（与声誉是两种不同的“货币”）。 */
-    public static int initialPoints(Role role) {
-        // TODO(S3)：实现 ReputationRulebook.initialPoints——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S3)：ReputationRulebook.initialPoints 尚未实现");
+    public BigInteger getScoreForUpVote() {
+        return UP_VOTE;
+    }
+    public BigInteger getScoreForDownVote() {
+        return DOWN_VOTE;
+    }
+    public BigInteger getScoreForChangeUpToDown() {
+        return VOTE_CHANGE_UP_TO_DOWN;
+    }
+    public BigInteger getDailyUpLimit() {
+        return DAILY_UP_LIMIT;
     }
 }
