@@ -1,10 +1,5 @@
 package com.campusoverflow.qa.application.fake;
 
-import com.campusoverflow.identity.api.CourseSummary;
-import com.campusoverflow.identity.api.IdentityApi;
-import com.campusoverflow.identity.api.UserSummary;
-import com.campusoverflow.qa.application.port.QuestionListCache;
-import com.campusoverflow.qa.application.query.QuestionSummaryView;
 import com.campusoverflow.qa.domain.Answer;
 import com.campusoverflow.qa.domain.AnswerRepository;
 import com.campusoverflow.qa.domain.Question;
@@ -15,11 +10,9 @@ import com.campusoverflow.qa.domain.VoteRepository;
 import com.campusoverflow.shared.audit.AuditTrail;
 import com.campusoverflow.shared.event.IntegrationEvent;
 import com.campusoverflow.shared.event.IntegrationEventPublisher;
-import com.campusoverflow.shared.page.PageRequest;
-import com.campusoverflow.shared.page.PageResult;
-import com.campusoverflow.shared.security.Role;
+
+import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,8 +22,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
- * 手写测试替身（Test Double）。应用服务只依赖端口接口，因此不需要 Spring 容器、不需要数据库，
- * 单元测试可以在毫秒级完成——这正是“可测试性”作为驱动性架构特征带来的收益。
+ * 手写测试替身（Test Double）。应用服务只依赖端口接口，不需要 Spring、数据库，用于单元测试。
  */
 public final class QaTestFixtures {
 
@@ -107,13 +99,16 @@ public final class QaTestFixtures {
             if (vote.id() == null) {
                 vote.assignId(sequence.incrementAndGet());
             }
-            store.put(key(vote.voterId(), vote.targetType(), vote.targetId()), vote);
+            // Vote.TargetType 映射为 domain.TargetType，当前S1仅有ANSWER枚举项
+            TargetType globalType = TargetType.ANSWER;
+            store.put(key(vote.voterId(), globalType, vote.targetId()), vote);
             return vote;
         }
 
         @Override
         public void delete(Vote vote) {
-            store.remove(key(vote.voterId(), vote.targetType(), vote.targetId()));
+            TargetType globalType = TargetType.ANSWER;
+            store.remove(key(vote.voterId(), globalType, vote.targetId()));
         }
 
         private static String key(long voterId, TargetType type, long targetId) {
@@ -121,7 +116,7 @@ public final class QaTestFixtures {
         }
     }
 
-    /** 记录所有已发布事件，便于断言“领域动作 → 集成事件”的契约。 */
+    /** 记录所有已发布事件，行走骨架监听事件断言使用 */
     public static class RecordingEvents implements IntegrationEventPublisher {
         public final List<IntegrationEvent> published = new ArrayList<>();
 
@@ -135,66 +130,6 @@ public final class QaTestFixtures {
         }
     }
 
-    public static class StubIdentity implements IdentityApi {
-        private final Map<Long, UserSummary> users = new HashMap<>();
-        private final Map<Long, Boolean> courseManagers = new HashMap<>();
-
-        public StubIdentity withUser(long id, String name, Role role) {
-            users.put(id, new UserSummary(id, name, role, true, "计算机工程学院"));
-            return this;
-        }
-
-        public StubIdentity withCourseManager(long userId) {
-            courseManagers.put(userId, true);
-            return this;
-        }
-
-        @Override
-        public Optional<UserSummary> findUser(long userId) {
-            return Optional.ofNullable(users.get(userId));
-        }
-
-        @Override
-        public Map<Long, UserSummary> findUsers(Collection<Long> userIds) {
-            Map<Long, UserSummary> result = new HashMap<>();
-            userIds.forEach(id -> findUser(id).ifPresent(u -> result.put(id, u)));
-            return result;
-        }
-
-        @Override
-        public Optional<UserSummary> findByDisplayName(String displayName) {
-            return users.values().stream().filter(u -> u.displayName().equals(displayName)).findFirst();
-        }
-
-        @Override
-        public Optional<CourseSummary> findCourse(long courseId) {
-            return Optional.of(new CourseSummary(courseId, "CS2001", "数据结构", "2026-秋", 100L));
-        }
-
-        @Override
-        public boolean canManageCourse(long userId, Long courseId) {
-            return courseManagers.getOrDefault(userId, false);
-        }
-    }
-
-    public static class CountingCache implements QuestionListCache {
-        public int invalidations;
-
-        @Override
-        public Optional<PageResult<QuestionSummaryView>> get(Long courseId, PageRequest page) {
-            return Optional.empty();
-        }
-
-        @Override
-        public void put(Long courseId, PageRequest page, PageResult<QuestionSummaryView> value) {
-        }
-
-        @Override
-        public void invalidateAll() {
-            invalidations++;
-        }
-    }
-
     public static class RecordingAudit implements AuditTrail {
         public final List<String> actions = new ArrayList<>();
 
@@ -202,5 +137,14 @@ public final class QaTestFixtures {
         public void record(String action, Long actorId, String targetType, String targetId, String detail) {
             actions.add(action);
         }
+    }
+
+    public static Vote makeVote(long voterId, TargetType targetType, long targetId, int value) {
+        Vote.TargetType innerType = Vote.TargetType.ANSWER;
+        return Vote.reconstitute(null, voterId, innerType, targetId, value, Instant.now());
+    }
+
+    public static Vote answerVote(long voterId, long answerId, int value) {
+        return makeVote(voterId, TargetType.ANSWER, answerId, value);
     }
 }

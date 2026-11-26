@@ -104,7 +104,8 @@ class QuestionTest {
         void deletedAnswerCannotBeAccepted() {
             Question q = persistedQuestion();
             Answer a = persistedAnswer(q, 3, 50);
-            a.softDelete(new Actor(3, "回答者", Role.STUDENT), false, false, NOW);
+            // 只有这里！Answer.softDelete 需要 long userId
+            a.softDelete(3L, false, false, NOW);
             assertThatThrownBy(() -> q.accept(a, ASKER, false)).isInstanceOf(BusinessRuleException.class);
         }
     }

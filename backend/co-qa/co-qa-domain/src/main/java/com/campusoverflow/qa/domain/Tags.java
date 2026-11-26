@@ -26,10 +26,8 @@ public record Tags(List<TagName> values) {
         return new Tags(raw.stream().map(TagName::new).toList());
     }
 
+    /** 规范化后的标签名（已小写、去重、保持原始顺序）。 */
     public List<String> names() {
-        // 取出每个TagName里面的文本，返回字符串标签名列表
-        return values.stream()
-                .map(TagName::value)
-                .toList();
+        return values.stream().map(TagName::value).toList();
     }
 }
