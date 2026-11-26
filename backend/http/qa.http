@@ -1,0 +1,517 @@
+### ============================================================================
+### CampusOverflow 问答闭环冒烟演示脚本（Sprint1 / PB-19）
+### ----------------------------------------------------------------------------
+### 运行前置：
+###   1) 在项目根目录执行：docker compose -f deploy/docker-compose.yml up -d --build
+###      后端地址 http://localhost:8080（容器默认 SPRING_PROFILES=prod,demo，已自动灌入演示数据）
+###   2) 用 IDEA 打开本文件，右上角选择 “Run All Requests”，或逐个点绿色三角
+###   3) Cookie（SESSION / XSRF-TOKEN）由 IDEA HTTP Client 自动保存，无需手工复制
+###
+### 演示账号（所有账号密码统一为 Campus2026）：
+###   学生 小明 2023001（提问者）   学生 小红 2023002（回答者）   学生 小刚 2023003（投票/评论者）
+###   教师 王老师 T2001            助教 李助教 TA3001           管理员 admin01
+###
+### 演示链路：401反例 → 提问 → 回答 → 编辑回答 → 投票/幂等/改投/撤销
+###           → 评论 → 二级回复 → 教师认证 → 采纳最佳答案 → 详情复核
+###           → 热门标签 → 权限反例（提问者删有回答的问题 422 / 作者删已采纳回答 403）
+###           → 课程管理者删除回答与问题 → 软删除后不可见 → 登出
+### ============================================================================
+
+
+### 0. 获取 CSRF 令牌（所有写操作都必须带 X-XSRF-TOKEN 请求头）
+###    注意：请求头要传 Cookie 里的原始 token；/auth/csrf 返回的 JSON token 是 BREACH 防护的掩码值，直接拿它会被判 403 AUTH-403-CSRF
+GET http://localhost:8080/api/v1/auth/csrf
+Accept: application/json
+
+> {%
+    client.test("拿到 CSRF 令牌", function () {
+        client.assert(response.status === 200, "获取 CSRF 失败：" + response.status);
+        client.assert(response.cookies["XSRF-TOKEN"] !== undefined, "响应里没有 XSRF-TOKEN Cookie");
+    });
+    client.global.set("xsrf", response.cookies["XSRF-TOKEN"].value);
+%}
+
+
+### 1. 反例：未登录访问“我的课程”必须 401（AUTH-401 请先登录）
+GET http://localhost:8080/api/v1/courses/mine
+Accept: application/json
+
+> {%
+    client.test("未登录被拦截（401）", function () {
+        client.assert(response.status === 401, "应返回 401，实际：" + response.status);
+        client.assert(response.body.code === "AUTH-401", "错误码应为 AUTH-401");
+    });
+%}
+
+
+### 2. 登录：学生 小明（提问者）
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "username": "2023001",
+  "password": "Campus2026"
+}
+
+> {%
+    client.test("小明登录成功", function () {
+        client.assert(response.status === 200, "登录失败：" + response.status + "，响应：" + response.body);
+        client.assert(response.body.role === "STUDENT", "当前角色不是 STUDENT");
+    });
+    client.global.set("mingId", response.body.id);
+%}
+
+
+### 3. 课程列表（取演示课程 CS2001 的 id，写入全局变量 courseId）
+GET http://localhost:8080/api/v1/courses
+Accept: application/json
+
+> {%
+    client.test("课程列表返回", function () {
+        client.assert(response.status === 200, "课程列表失败：" + response.status);
+        client.assert(response.body.length > 0, "课程列表为空：请确认容器使用 demo profile 启动");
+    });
+    client.global.set("courseId", response.body[0].id);
+%}
+
+
+### 4. 发布问题（提问：小明）—— 标签 1~5 个，标题 ≤150 字，正文 ≤30000 字
+POST http://localhost:8080/api/v1/questions
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "courseId": {{courseId}},
+  "title": "Sprint1 冒烟：红黑树插入后为什么必须旋转？",
+  "body": "课上讲到红黑树插入后要做变色和旋转。我理解变色是为了维持“红节点不能相邻”，\n但是为什么某些情况下仅靠变色不够、一定要旋转？\n\n```java\nvoid insertFixup(Node z) { /* ... */ }\n```",
+  "tags": ["数据结构", "红黑树"]
+}
+
+> {%
+    client.test("提问成功（201）", function () {
+        client.assert(response.status === 201, "提问失败：" + response.status + "，响应：" + response.body);
+    });
+    client.global.set("questionId", response.body.id);
+%}
+
+
+### 5. 问题列表（最新优先；可按 courseId 过滤）
+GET http://localhost:8080/api/v1/questions?courseId={{courseId}}&page=1&size=20
+Accept: application/json
+
+> {%
+    client.test("列表返回当前问题", function () {
+        client.assert(response.status === 200, "问题列表失败：" + response.status);
+        client.assert(response.body.items.length > 0, "问题列表为空");
+    });
+%}
+
+
+### 6. 问题详情（未登录也可读：返回回答、评论、我的投票、可执行操作）
+GET http://localhost:8080/api/v1/questions/{{questionId}}
+Accept: application/json
+
+> {%
+    client.test("详情可读", function () {
+        client.assert(response.status === 200, "详情失败：" + response.status);
+        client.assert(response.body.title.length > 0, "标题为空");
+    });
+%}
+
+
+### 7. 登录：学生 小红（回答者）
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "username": "2023002",
+  "password": "Campus2026"
+}
+
+> {%
+    client.test("小红登录成功", function () {
+        client.assert(response.status === 200, "登录失败：" + response.status);
+    });
+%}
+
+
+### 8. 提交回答（小红）
+POST http://localhost:8080/api/v1/questions/{{questionId}}/answers
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "body": "关键在于**黑高**这个不变量：变色只能在局部交换红黑属性，不能改变某条路径上的黑节点个数分布；\n当“父节点与叔节点”颜色不同（叔节点为黑）时，单纯变色会破坏黑高平衡，只能通过旋转把子树结构改成可以合法变色的形态。\n一句话口诀：**叔红变色、叔黑旋转**。"
+}
+
+> {%
+    client.test("回答成功（201）", function () {
+        client.assert(response.status === 201, "回答失败：" + response.status + "，响应：" + response.body);
+    });
+    client.global.set("answerId", response.body.id);
+%}
+
+
+### 9. 编辑回答（小红本人有权）
+PUT http://localhost:8080/api/v1/answers/{{answerId}}
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "body": "补充：关键在于**黑高**这个不变量——变色只在局部交换红黑属性，不能改变某条路径上的黑节点个数分布。\n叔节点为黑时单纯变色会破坏黑高平衡，必须靠旋转把子树改成可合法变色的形态。\n口诀：**叔红变色、叔黑旋转**。"
+}
+
+> {%
+    client.test("编辑回答成功（204）", function () {
+        client.assert(response.status === 204, "编辑失败：" + response.status + "，响应：" + response.body);
+    });
+%}
+
+
+### 10. 登录：学生 小刚（投票与评论者）
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "username": "2023003",
+  "password": "Campus2026"
+}
+
+> {%
+    client.test("小刚登录成功", function () {
+        client.assert(response.status === 200, "登录失败：" + response.status);
+    });
+%}
+
+
+### 11. 给回答投赞成票（value: 1 赞成 / -1 反对 / 0 撤销；PUT 幂等）
+PUT http://localhost:8080/api/v1/votes
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "targetType": "ANSWER",
+  "targetId": {{answerId}},
+  "value": 1
+}
+
+> {%
+    client.test("投票成功", function () {
+        client.assert(response.status === 200, "投票失败：" + response.status + "，响应：" + response.body);
+        client.assert(response.body.myVote === 1, "我的票应为 1");
+        client.assert(response.body.scoreDelta === 1, "得分增量应为 +1");
+    });
+%}
+
+
+### 12. 重复投同一票（幂等：不再加分，scoreDelta 必须为 0）
+PUT http://localhost:8080/api/v1/votes
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "targetType": "ANSWER",
+  "targetId": {{answerId}},
+  "value": 1
+}
+
+> {%
+    client.test("重复投票幂等", function () {
+        client.assert(response.status === 200, "重复投票失败：" + response.status);
+        client.assert(response.body.scoreDelta === 0, "重复投相同票不应再加减分");
+    });
+%}
+
+
+### 13. 改投反对票（value: -1，scoreDelta 应为 -2）
+PUT http://localhost:8080/api/v1/votes
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "targetType": "ANSWER",
+  "targetId": {{answerId}},
+  "value": -1
+}
+
+> {%
+    client.test("改投成功", function () {
+        client.assert(response.status === 200, "改投失败：" + response.status);
+        client.assert(response.body.scoreDelta === -2, "从 +1 改到 -1，得分增量应为 -2");
+    });
+%}
+
+
+### 14. 撤销投票（value: 0，scoreDelta 应为 +1）
+PUT http://localhost:8080/api/v1/votes
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "targetType": "ANSWER",
+  "targetId": {{answerId}},
+  "value": 0
+}
+
+> {%
+    client.test("撤销投票成功", function () {
+        client.assert(response.status === 200, "撤销失败：" + response.status);
+        client.assert(response.body.myVote === 0, "撤销后我的票应为 0");
+        client.assert(response.body.scoreDelta === 1, "撤销 -1 票应回补 +1");
+    });
+%}
+
+
+### 15. 重新投赞成票（让回答最终带着 1 张赞成票进详情页）
+PUT http://localhost:8080/api/v1/votes
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "targetType": "ANSWER",
+  "targetId": {{answerId}},
+  "value": 1
+}
+
+> {%
+    client.test("重新投票成功", function () {
+        client.assert(response.status === 200, "投票失败：" + response.status);
+        client.assert(response.body.myVote === 1, "我的票应为 1");
+    });
+%}
+
+
+### 16. 对回答发表评论（正文 ≤500 字；支持 @昵称，由 Discovery 解析并提醒）
+POST http://localhost:8080/api/v1/comments
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "targetType": "ANSWER",
+  "targetId": {{answerId}},
+  "parentId": null,
+  "body": "@小红 “叔红变色、叔黑旋转”这个口诀太好记了，谢谢！"
+}
+
+> {%
+    client.test("评论成功（201）", function () {
+        client.assert(response.status === 201, "评论失败：" + response.status + "，响应：" + response.body);
+    });
+    client.global.set("commentId", response.body.id);
+%}
+
+
+### 17. 二级回复（parentId 指向上一条评论，只允许一层回复）
+POST http://localhost:8080/api/v1/comments
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "targetType": "ANSWER",
+  "targetId": {{answerId}},
+  "parentId": {{commentId}},
+  "body": "@小刚 不客气，黑高那条路径数一遍基本就不会错了。"
+}
+
+> {%
+    client.test("二级回复成功（201）", function () {
+        client.assert(response.status === 201, "二级回复失败：" + response.status + "，响应：" + response.body);
+    });
+%}
+
+
+### 18. 登录：教师 王老师（教师认证与课程管理权限）
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "username": "T2001",
+  "password": "Campus2026"
+}
+
+> {%
+    client.test("王老师登录成功", function () {
+        client.assert(response.status === 200, "登录失败：" + response.status);
+        client.assert(response.body.role === "TEACHER", "当前角色不是 TEACHER");
+    });
+%}
+
+
+### 19. 教师认证回答（仅 TEACHER / TA 可调用）
+POST http://localhost:8080/api/v1/answers/{{answerId}}/endorsement
+X-XSRF-TOKEN: {{xsrf}}
+
+> {%
+    client.test("教师认证成功（204）", function () {
+        client.assert(response.status === 204, "认证失败：" + response.status + "，响应：" + response.body);
+    });
+%}
+
+
+### 20. 登录：学生 小明（回到提问者身份执行采纳）
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "username": "2023001",
+  "password": "Campus2026"
+}
+
+> {%
+    client.test("小明重新登录成功", function () {
+        client.assert(response.status === 200, "登录失败：" + response.status);
+    });
+%}
+
+
+### 21. 采纳最佳答案（提问者本人，或课程教师/助教）
+PUT http://localhost:8080/api/v1/questions/{{questionId}}/accepted-answer
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "answerId": {{answerId}}
+}
+
+> {%
+    client.test("采纳成功（204）", function () {
+        client.assert(response.status === 204, "采纳失败：" + response.status + "，响应：" + response.body);
+    });
+%}
+
+
+### 22. 详情复核（问题侧：采纳标记、回答数；回答侧：认证标记、得分、评论数）
+GET http://localhost:8080/api/v1/questions/{{questionId}}
+Accept: application/json
+
+> {%
+    client.test("详情复核通过", function () {
+        client.assert(response.status === 200, "详情失败：" + response.status);
+        client.assert(response.body.acceptedAnswerId === client.global.get("answerId"), "采纳答案 id 不一致");
+        client.assert(response.body.answerCount === 1, "回答数应为 1");
+        const answer = response.body.answers[0];
+        client.assert(answer.accepted === true, "回答应标记为已采纳");
+        client.assert(answer.endorsedBy !== null, "回答应有教师认证人");
+        client.assert(answer.score === 1, "回答得分应为 1");
+        client.assert(answer.comments !== null && answer.comments.length === 2, "回答下应有 1 条评论 + 1 条二级回复");
+    });
+%}
+
+
+### 23. 热门标签（按使用次数，limit 默认 20）
+GET http://localhost:8080/api/v1/tags/popular?limit=10
+Accept: application/json
+
+> {%
+    client.test("热门标签返回", function () {
+        client.assert(response.status === 200, "热门标签失败：" + response.status);
+        client.assert(response.body.length > 0, "热门标签为空");
+    });
+%}
+
+
+### 24. 反例：提问者删除“已有回答”的问题必须被拒（QA-2005，业务规则 422）
+DELETE http://localhost:8080/api/v1/questions/{{questionId}}
+X-XSRF-TOKEN: {{xsrf}}
+
+> {%
+    client.test("提问者删不了有回答的问题（422）", function () {
+        client.assert(response.status === 422, "应返回 422，实际：" + response.status + "，响应：" + response.body);
+        client.assert(response.body.code === "QA-2005", "错误码应为 QA-2005，实际：" + response.body.code);
+    });
+%}
+
+
+### 25. 登录：学生 小红（删除回答需要用作者身份）
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "username": "2023002",
+  "password": "Campus2026"
+}
+
+> {%
+    client.test("小红重新登录成功", function () {
+        client.assert(response.status === 200, "登录失败：" + response.status);
+    });
+%}
+
+
+### 26. 反例：已采纳回答不允许作者自行删除（QA-0206，防“先骗采纳再删除”）
+DELETE http://localhost:8080/api/v1/answers/{{answerId}}
+X-XSRF-TOKEN: {{xsrf}}
+
+> {%
+    client.test("作者删不了已采纳回答（403）", function () {
+        client.assert(response.status === 403, "应返回 403，实际：" + response.status + "，响应：" + response.body);
+        client.assert(response.body.code === "QA-0206", "错误码应为 QA-0206，实际：" + response.body.code);
+    });
+%}
+
+
+### 27. 登录：教师 王老师（课程管理者身份执行删除）
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+X-XSRF-TOKEN: {{xsrf}}
+
+{
+  "username": "T2001",
+  "password": "Campus2026"
+}
+
+> {%
+    client.test("王老师登录成功", function () {
+        client.assert(response.status === 200, "登录失败：" + response.status);
+    });
+%}
+
+
+### 28. 课程管理者删除已采纳回答（软删除：管理者不受 QA-0206 限制）
+DELETE http://localhost:8080/api/v1/answers/{{answerId}}
+X-XSRF-TOKEN: {{xsrf}}
+
+> {%
+    client.test("管理者删除回答成功（204）", function () {
+        client.assert(response.status === 204, "删除失败：" + response.status + "，响应：" + response.body);
+    });
+%}
+
+
+### 29. 课程管理者删除问题（软删除：管理者可删带回答的问题）
+DELETE http://localhost:8080/api/v1/questions/{{questionId}}
+X-XSRF-TOKEN: {{xsrf}}
+
+> {%
+    client.test("管理者删除问题成功（204）", function () {
+        client.assert(response.status === 204, "删除失败：" + response.status + "，响应：" + response.body);
+    });
+%}
+
+
+### 30. 删除后再读问题详情：软删除内容对外不可见（非 200 即符合预期）
+GET http://localhost:8080/api/v1/questions/{{questionId}}
+Accept: application/json
+
+> {%
+    client.test("已删除问题不再返回正常详情", function () {
+        client.assert(response.status !== 200, "已删除的问题不应再返回 200，实际：" + response.status);
+    });
+%}
+
+
+### 31. 登出（会话与 Cookie 由服务端清理）
+POST http://localhost:8080/api/v1/auth/logout
+X-XSRF-TOKEN: {{xsrf}}
+
+> {%
+    client.test("登出成功（204）", function () {
+        client.assert(response.status === 204, "登出失败：" + response.status);
+    });
+%}

@@ -54,8 +54,23 @@ public class Question {
     }
 
     public static Question post(long authorId, Long courseId, Title title, MarkdownBody body, Tags tags, Instant now) {
-        // TODO(S2)：实现 Question.post——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Question.post 尚未实现");
+        // 新建问题：无采纳答案、未删除、计数器初始为0
+        return new Question(
+                null,
+                authorId,
+                courseId,
+                title,
+                body,
+                tags,
+                null,
+                0,
+                0,
+                0,
+                now,
+                now,
+                null,
+                0
+        );
     }
 
     public static Question reconstitute(Long id, long authorId, Long courseId, Title title, MarkdownBody body,
@@ -67,29 +82,74 @@ public class Question {
 
     public void edit(Actor actor, boolean actorManagesCourse, Title newTitle, MarkdownBody newBody, Tags newTags,
                      Instant now) {
-        // TODO(S2)：实现 Question.edit——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Question.edit 尚未实现");
+        ensureNotDeleted();
+        // 校验权限：作者本人 或者 课程管理员才能编辑
+        if (actor.userId() != authorId && !actorManagesCourse) {
+            throw new ForbiddenException("QA-2001", "无权编辑该问题");
+        }
+        this.title = newTitle;
+        this.body = newBody;
+        this.tags = newTags;
+        this.updatedAt = now;
     }
 
-    /** 采纳最佳答案。 */
-    public void accept(Answer answer, Actor actor, boolean actorManagesCourse) {
-        // TODO(S2)：实现 Question.accept——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Question.accept 尚未实现");
+    public void accept(Answer answer, Actor operator, boolean actorManagesCourse) {
+        ensureNotDeleted();
+
+        // 1. 不能重复采纳（采纳结果不可更改，QA-2002）
+        if (this.acceptedAnswerId() != null) {
+            throw new ConflictException("QA-2002", "该问题已经采纳过回答");
+        }
+
+        // 2. 已删除的回答不能被采纳（QA-0208）
+        if (answer.isDeleted()) {
+            throw new BusinessRuleException("QA-0208", "已删除的回答不能被采纳");
+        }
+
+        // 3. 答案必须属于当前问题
+        if (!Objects.equals(this.id(), answer.questionId())) {
+            throw new BusinessRuleException("QA-2001", "该回答不属于此问题，不能采纳");
+        }
+
+        // 4. 权限：提问作者 或者 课程管理员
+        boolean isAuthor = Objects.equals(operator.userId(), this.authorId);
+        if (!isAuthor && !actorManagesCourse) {
+            throw new ForbiddenException("QA-3001", "没有权限采纳该回答");
+        }
+
+        this.acceptedAnswerId = answer.id();
     }
+
+
+
 
     public void softDelete(Actor actor, boolean actorManagesCourse, Instant now) {
-        // TODO(S2)：实现 Question.softDelete——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Question.softDelete 尚未实现");
+        ensureNotDeleted();
+        // 提问者：只能删 answerCount=0（没有回答）的问题
+        if (!actorManagesCourse) {
+            if (actor.userId() != authorId) {
+                throw new ForbiddenException("QA-2004", "非作者不能删除该问题");
+            }
+            if (answerCount > 0) {
+                throw new BusinessRuleException("QA-2005", "已有回答的问题，提问者不能删除");
+            }
+        }
+        this.deletedAt = now;
+        this.updatedAt = now;
     }
 
     public void ensureOpenForAnswers() {
-        // TODO(S2)：实现 Question.ensureOpenForAnswers——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Question.ensureOpenForAnswers 尚未实现");
+        ensureNotDeleted();
+        // 已有采纳答案，不再开放回答
+        if (acceptedAnswerId != null) {
+            throw new BusinessRuleException("QA-2006", "该问题已有采纳答案，不再接受新回答");
+        }
     }
 
     private void ensureNotDeleted() {
-        // TODO(S2)：实现 Question.ensureNotDeleted——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Question.ensureNotDeleted 尚未实现");
+        if (isDeleted()) {
+            throw new ConflictException("QA-2007", "问题已删除，禁止操作");
+        }
     }
 
     public boolean isDeleted() {

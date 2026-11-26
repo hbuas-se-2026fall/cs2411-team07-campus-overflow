@@ -1,6 +1,7 @@
 package com.campusoverflow.qa.domain;
 
 import com.campusoverflow.shared.domain.BusinessRuleException;
+import com.campusoverflow.shared.domain.ConflictException;
 import java.time.Instant;
 
 /** 投票聚合：同一用户对同一内容仅一票（数据库唯一约束兜底），值为 +1 或 -1；撤销即删除。 */
@@ -24,8 +25,12 @@ public class Vote {
 
     public static Vote cast(long voterId, long targetAuthorId, TargetType targetType, long targetId, int value,
                             Instant now) {
-        // TODO(S2)：实现 Vote.cast——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Vote.cast 尚未实现");
+        checkValue(value);
+        // 业务规则：不能给自己投票
+        if(voterId == targetAuthorId){
+            throw new BusinessRuleException("QA-0303", "不允许给自己的内容投票");
+        }
+        return new Vote(null, voterId, targetType, targetId, value, now);
     }
 
     public static Vote reconstitute(Long id, long voterId, TargetType targetType, long targetId, int value,
@@ -35,13 +40,21 @@ public class Vote {
 
     /** 改投，返回原值。 */
     public int change(int newValue, Instant now) {
-        // TODO(S2)：实现 Vote.change——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Vote.change 尚未实现");
+        checkValue(newValue);
+        if(this.value == newValue){
+            throw new ConflictException("QA-0301", "不能重复投相同票数");
+        }
+        int oldVal = this.value;
+        this.value = newValue;
+        this.updatedAt = now;
+        return oldVal;
     }
 
     private static int checkValue(int value) {
-        // TODO(S2)：实现 Vote.checkValue——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Vote.checkValue 尚未实现");
+        if(value != 1 && value != -1){
+            throw new BusinessRuleException("QA-0302", "投票只允许 +1 或者 -1");
+        }
+        return value;
     }
 
     public void assignId(long id) {
@@ -54,4 +67,8 @@ public class Vote {
     public long targetId() { return targetId; }
     public int value() { return value; }
     public Instant updatedAt() { return updatedAt; }
+
+    public enum TargetType{
+        QUESTION, ANSWER, COMMENT
+    }
 }

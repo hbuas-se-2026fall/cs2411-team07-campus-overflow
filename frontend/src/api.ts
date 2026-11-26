@@ -53,8 +53,12 @@ export const api = {
   ask: (body: { courseId?: number; title: string; body: string; tags: string[] }) =>
     request<{ id: number }>('POST', '/v1/questions', body),
   deleteQuestion: (id: number) => request<void>('DELETE', `/v1/questions/${id}`),
+  editQuestion: (id: number, body: { courseId?: number; title: string; body: string; tags: string[] }) =>
+    request<void>('PUT', `/v1/questions/${id}`, body),
   answer: (questionId: number, body: string) =>
     request<{ id: number }>('POST', `/v1/questions/${questionId}/answers`, { body }),
+  editAnswer: (answerId: number, body: string) => request<void>('PUT', `/v1/answers/${answerId}`, { body }),
+  deleteAnswer: (answerId: number) => request<void>('DELETE', `/v1/answers/${answerId}`),
   accept: (questionId: number, answerId: number) =>
     request<void>('PUT', `/v1/questions/${questionId}/accepted-answer`, { answerId }),
   endorse: (answerId: number) => request<void>('POST', `/v1/answers/${answerId}/endorsement`, {}),

@@ -30,8 +30,20 @@ public class Comment {
 
     public static Comment post(TargetType targetType, long targetId, long questionId, long authorId, Comment parent,
                                String body, Instant now) {
-        // TODO(S2)：实现 Comment.post——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Comment.post 尚未实现");
+        // 内容非空校验
+        if (body == null || body.isBlank()) {
+            throw new BusinessRuleException("QA-0401", "评论内容不能为空");
+        }
+        // 长度限制
+        if (body.length() > 500) {
+            throw new BusinessRuleException("QA-0402", "评论不能超过500字符");
+        }
+        // 只允许单层回复：parent本身不能再带有parent（禁止三层及以上嵌套）
+        if (parent != null && parent.parentId() != null) {
+            throw new BusinessRuleException("QA-0403", "仅支持一层评论回复，不支持多层嵌套");
+        }
+        Long pid = parent == null ? null : parent.id();
+        return new Comment(null, targetType, targetId, questionId, authorId, pid, body, now);
     }
 
     public static Comment reconstitute(Long id, TargetType targetType, long targetId, long questionId, long authorId,

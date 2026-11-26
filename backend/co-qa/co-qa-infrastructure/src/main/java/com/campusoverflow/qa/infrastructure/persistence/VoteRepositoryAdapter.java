@@ -18,7 +18,7 @@ public class VoteRepositoryAdapter implements VoteRepository {
     @Override
     public Optional<Vote> find(long voterId, TargetType targetType, long targetId) {
         return jpa.findByVoterIdAndTargetTypeAndTargetId(voterId, targetType.name(), targetId)
-                .map(e -> Vote.reconstitute(e.getId(), e.getVoterId(), TargetType.valueOf(e.getTargetType()),
+                .map(e -> Vote.reconstitute(e.getId(), e.getVoterId(), Vote.TargetType.valueOf(e.getTargetType()),
                         e.getTargetId(), e.getValue(), e.getUpdatedAt()));
     }
 
