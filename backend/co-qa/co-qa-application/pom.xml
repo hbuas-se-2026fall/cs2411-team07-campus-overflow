@@ -14,6 +14,11 @@
     <dependencies>
         <dependency>
             <groupId>com.campusoverflow</groupId>
+            <artifactId>co-qa-domain</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.campusoverflow</groupId>
             <artifactId>co-qa-api</artifactId>
         </dependency>
         <dependency>

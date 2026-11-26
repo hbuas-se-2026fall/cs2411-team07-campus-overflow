@@ -6,12 +6,14 @@ import com.campusoverflow.shared.domain.Guard;
 public record MarkdownBody(String value) {
 
     public static MarkdownBody ofQuestion(String raw) {
-        // TODO(S2)：实现 MarkdownBody.ofQuestion——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：MarkdownBody.ofQuestion 尚未实现");
+        // 问题正文：非空，20 ~ 30000码点（实验文档）
+        Guard.requireText(raw, 20, 30000, "QA-1002", "问题正文长度必须在2‑30000字符之间");
+        return new MarkdownBody(raw);
     }
 
     public static MarkdownBody ofAnswer(String raw) {
-        // TODO(S2)：实现 MarkdownBody.ofAnswer——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：MarkdownBody.ofAnswer 尚未实现");
+        // 回答正文：非空，10 ~ 30000码点
+        Guard.requireText(raw, 10, 30000, "QA-1002", "回答正文长度必须在10‑30000字符之间");
+        return new MarkdownBody(raw);
     }
 }

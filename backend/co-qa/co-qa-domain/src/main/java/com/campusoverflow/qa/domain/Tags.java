@@ -27,7 +27,9 @@ public record Tags(List<TagName> values) {
     }
 
     public List<String> names() {
-        // TODO(S2)：实现 Tags.names——参考领域单元测试与 arc42 文档中的业务规则
-        throw new UnsupportedOperationException("TODO(S2)：Tags.names 尚未实现");
+        // 取出每个TagName里面的文本，返回字符串标签名列表
+        return values.stream()
+                .map(TagName::value)
+                .toList();
     }
 }
